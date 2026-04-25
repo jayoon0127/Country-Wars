@@ -405,10 +405,11 @@ function updateCombat(room, dt) {
         }
       }
     }
-
     if (target && u.cooldown <= 0) {
       let damage = u.damage;
+
       if (u.encircled) damage *= 0.7;
+      if (Date.now() < u.landingPenaltyUntil) damage *= 0.65;
 
       if (state.tech[u.ownerId]?.researched.includes("rifle") && u.type === "infantry") {
         damage *= 1.2;
@@ -416,6 +417,20 @@ function updateCombat(room, dt) {
       if (state.tech[u.ownerId]?.researched.includes("armor") && u.type === "tank") {
         damage *= 1.08;
       }
+      if (state.tech[u.ownerId]?.researched.includes("landing") && Date.now() < u.landingPenaltyUntil) {
+        damage *= 1.15;
+      }
+
+      target.hp -= damage;
+      u.cooldown = 0.7;
+
+      if (target.hp <= 0) {
+        if ("type" in target && state.units.find(x => x.id === target.id)) deadUnits.add(target.id);
+        else deadBuildings.add(target.id);
+      }
+    }
+
+    
 
       target.hp -= damage;
       u.cooldown = 0.7;
