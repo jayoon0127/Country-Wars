@@ -223,7 +223,13 @@
     let selectedBuildingId = null;
     let mode = "select";
     let drag = null;
-    let cam = { x: 0, y: 0 };
+    let cam = { x: 0, y: 0, zoom: 1 };
+    let keys = {};
+    let mouseScreen = { x: 0, y: 0 };
+    let isMiddlePanning = false;
+    let middlePanStart = null;
+    let camStart = null;
+
 
     function resize() {
       const rectW = window.innerWidth - 320;
