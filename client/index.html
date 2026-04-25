@@ -1,1 +1,742 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RTS Online</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #0f1419;
+      color: #e7eef6;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+    }
+    #lobbyScreen, #gameScreen {
+      width: 100vw;
+      height: 100vh;
+    }
+    #lobbyScreen {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(180deg, #111923, #0d1218);
+    }
+    .panel {
+      width: 420px;
+      background: #18212b;
+      border: 1px solid #2a3642;
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #32414f;
+      background: #111820;
+      color: #e7eef6;
+      margin-bottom: 10px;
+    }
+    button {
+      background: #2d7fd1;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 12px;
+      cursor: pointer;
+      margin-right: 6px;
+      margin-bottom: 6px;
+    }
+    button.secondary {
+      background: #3b4652;
+    }
+    button.warn {
+      background: #a56b23;
+    }
+    #lobbyPlayers {
+      margin-top: 10px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    #gameScreen {
+      display: none;
+      position: relative;
+    }
+    #topbar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 320px;
+      height: 60px;
+      background: rgba(14,18,24,0.96);
+      border-bottom: 1px solid #2a3642;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px;
+      z-index: 10;
+    }
+    #sidebar {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 320px;
+      bottom: 0;
+      background: #172029;
+      border-left: 1px solid #2a3642;
+      padding: 12px;
+      overflow-y: auto;
+      z-index: 10;
+    }
+    #gameCanvas {
+      position: absolute;
+      top: 60px;
+      left: 0;
+      right: 320px;
+      bottom: 0;
+      width: calc(100vw - 320px);
+      height: calc(100vh - 60px);
+      background: #1b2530;
+      display: block;
+    }
+    .card {
+      background: #202a35;
+      border: 1px solid #2f3c49;
+      border-radius: 12px;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    .tag {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #273240;
+      margin-right: 6px;
+      margin-bottom: 6px;
+      font-size: 12px;
+    }
+    .small {
+      font-size: 12px;
+      color: #bbcad9;
+    }
+    .tech {
+      border: 1px solid #354351;
+      border-radius: 10px;
+      padding: 8px;
+      margin-bottom: 8px;
+      background: #1b242d;
+    }
+    .peace { background: #35516c; }
+    .war { background: #7a3434; }
+    .alliance { background: #2c6948; }
+  </style>
+</head>
+<body>
+  <div id="lobbyScreen">
+    <div class="panel">
+      <h2>RTS Online Lobby</h2>
+      <input id="nameInput" placeholder="이름" value="Player" />
+      <input id="roomInput" placeholder="방 코드" />
+      <div>
+        <button id="createBtn">방 만들기</button>
+        <button id="joinBtn" class="secondary">방 참가</button>
+      </div>
+      <div style="margin-top:8px;">
+        <button id="readyBtn" class="warn">준비</button>
+        <button id="startBtn">게임 시작</button>
+      </div>
+      <div id="lobbyInfo" class="small" style="margin-top:12px;">서버 연결 중...</div>
+      <div id="lobbyPlayers"></div>
+    </div>
+  </div>
+
+  <div id="gameScreen">
+    <div id="topbar">
+      <button id="modeSelectBtn">선택</button>
+      <button id="modeBuildPortBtn">항구 건설</button>
+      <button id="trainInfBtn">보병</button>
+      <button id="trainTankBtn">기갑</button>
+      <button id="trainShipBtn">해군</button>
+      <span class="tag">금: <span id="goldText">0</span></span>
+      <span class="tag">과학: <span id="scienceText">0</span></span>
+      <span class="tag">선택: <span id="selectionText">0</span></span>
+      <span class="tag">모드: <span id="modeText">선택</span></span>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="sidebar">
+      <div class="card">
+        <h3>내 정보</h3>
+        <div id="meInfo" class="small"></div>
+      </div>
+
+      <div class="card">
+        <h3>선택 정보</h3>
+        <div id="selectedInfo" class="small">없음</div>
+      </div>
+
+      <div class="card">
+        <h3>외교</h3>
+        <div id="diplomacyList"></div>
+      </div>
+
+      <div class="card">
+        <h3>기술 트리</h3>
+        <div id="techList"></div>
+      </div>
+
+      <div class="card">
+        <h3>메시지</h3>
+        <div id="messages" class="small"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const WS_URL = "ws://localhost:8080";
+
+    const lobbyScreen = document.getElementById("lobbyScreen");
+    const gameScreen = document.getElementById("gameScreen");
+    const lobbyInfo = document.getElementById("lobbyInfo");
+    const lobbyPlayers = document.getElementById("lobbyPlayers");
+    const roomInput = document.getElementById("roomInput");
+    const nameInput = document.getElementById("nameInput");
+    const createBtn = document.getElementById("createBtn");
+    const joinBtn = document.getElementById("joinBtn");
+    const readyBtn = document.getElementById("readyBtn");
+    const startBtn = document.getElementById("startBtn");
+
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    let socket;
+    let clientId = null;
+    let room = null;
+    let myPlayerId = null;
+    let gameState = null;
+    let selectedUnitIds = [];
+    let selectedBuildingId = null;
+    let mode = "select";
+    let drag = null;
+    let cam = { x: 0, y: 0 };
+
+    function resize() {
+      const rectW = window.innerWidth - 320;
+      const rectH = window.innerHeight - 60;
+      canvas.width = rectW * devicePixelRatio;
+      canvas.height = rectH * devicePixelRatio;
+      canvas.style.width = rectW + "px";
+      canvas.style.height = rectH + "px";
+      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    }
+    window.addEventListener("resize", resize);
+    resize();
+
+    function send(type, data = {}) {
+      if (socket && socket.readyState === 1) {
+        socket.send(JSON.stringify({ type, ...data }));
+      }
+    }
+
+    function connect() {
+      socket = new WebSocket(WS_URL);
+
+      socket.onopen = () => {
+        lobbyInfo.textContent = "서버 연결 완료";
+      };
+
+      socket.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+
+        if (msg.type === "hello") {
+          clientId = msg.clientId;
+        }
+
+        if (msg.type === "roomJoined") {
+          room = msg.room;
+          myPlayerId = msg.yourPlayerId;
+          roomInput.value = room.id;
+          renderLobby();
+        }
+
+        if (msg.type === "roomUpdated") {
+          room = msg.room;
+          renderLobby();
+        }
+
+        if (msg.type === "gameStarted") {
+          gameState = msg;
+          lobbyScreen.style.display = "none";
+          gameScreen.style.display = "block";
+          resize();
+        }
+
+        if (msg.type === "state") {
+          gameState = msg;
+          updateUI();
+        }
+
+        if (msg.type === "errorMessage") {
+          alert(msg.message);
+        }
+      };
+
+      socket.onclose = () => {
+        lobbyInfo.textContent = "서버 연결 끊김";
+      };
+    }
+
+    connect();
+
+    function renderLobby() {
+      if (!room) return;
+      lobbyInfo.textContent = `방 코드: ${room.id} / 상태: ${room.phase}`;
+      lobbyPlayers.innerHTML = room.players.map(p => {
+        const host = room.hostClientId === p.clientId ? " (방장)" : "";
+        const me = p.id === myPlayerId ? " (나)" : "";
+        return `<div>${p.name}${host}${me} - ${p.ready ? "준비완료" : "대기중"}</div>`;
+      }).join("");
+    }
+
+    createBtn.onclick = () => {
+      send("createRoom", { name: nameInput.value.trim() || "Host" });
+    };
+
+    joinBtn.onclick = () => {
+      send("joinRoom", {
+        roomId: roomInput.value.trim(),
+        name: nameInput.value.trim() || "Player"
+      });
+    };
+
+    readyBtn.onclick = () => {
+      if (!room) return;
+      const me = room.players.find(p => p.id === myPlayerId);
+      const next = !me?.ready;
+      send("setReady", { ready: next });
+    };
+
+    startBtn.onclick = () => {
+      send("startGame");
+    };
+
+    document.getElementById("modeSelectBtn").onclick = () => setMode("select");
+    document.getElementById("modeBuildPortBtn").onclick = () => setMode("buildPort");
+
+    document.getElementById("trainInfBtn").onclick = () => {
+      if (!selectedBuildingId) return;
+      send("command", { command: "train", buildingId: selectedBuildingId, unitType: "infantry" });
+    };
+
+    document.getElementById("trainTankBtn").onclick = () => {
+      if (!selectedBuildingId) return;
+      send("command", { command: "train", buildingId: selectedBuildingId, unitType: "tank" });
+    };
+
+    document.getElementById("trainShipBtn").onclick = () => {
+      if (!selectedBuildingId) return;
+      send("command", { command: "train", buildingId: selectedBuildingId, unitType: "ship" });
+    };
+
+    function setMode(m) {
+      mode = m;
+      document.getElementById("modeText").textContent = m;
+    }
+
+    function worldPos(evt) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: evt.clientX - rect.left + cam.x,
+        y: evt.clientY - rect.top + cam.y
+      };
+    }
+
+    canvas.addEventListener("mousedown", (e) => {
+      if (!gameState) return;
+      const p = worldPos(e);
+
+      if (e.button === 0) {
+        drag = { x1: p.x, y1: p.y, x2: p.x, y2: p.y, active: true };
+      }
+    });
+
+    canvas.addEventListener("mousemove", (e) => {
+      if (!drag || !drag.active) return;
+      const p = worldPos(e);
+      drag.x2 = p.x;
+      drag.y2 = p.y;
+    });
+
+    canvas.addEventListener("mouseup", (e) => {
+      if (!gameState) return;
+      const p = worldPos(e);
+
+      if (e.button === 0) {
+        if (mode === "buildPort") {
+          send("command", { command: "buildPort", x: p.x, y: p.y });
+          setMode("select");
+          drag = null;
+          return;
+        }
+
+        const dx = Math.abs(drag.x2 - drag.x1);
+        const dy = Math.abs(drag.y2 - drag.y1);
+
+        if (dx < 5 && dy < 5) {
+          handleSingleSelect(p.x, p.y);
+        } else {
+          handleBoxSelect(drag);
+        }
+
+        drag = null;
+      }
+    });
+
+    canvas.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      if (!gameState || selectedUnitIds.length === 0) return;
+      const p = worldPos(e);
+      send("command", { command: "move", unitIds: selectedUnitIds, tx: p.x, ty: p.y });
+    });
+
+    function handleSingleSelect(x, y) {
+      selectedUnitIds = [];
+      selectedBuildingId = null;
+
+      const myUnits = gameState.units.filter(u => u.ownerId === myPlayerId);
+      for (const u of myUnits) {
+        const d = Math.hypot(u.x - x, u.y - y);
+        if (d < u.radius + 6) {
+          selectedUnitIds = [u.id];
+          updateUI();
+          return;
+        }
+      }
+
+      const myBuildings = gameState.buildings.filter(b => b.ownerId === myPlayerId);
+      for (const b of myBuildings) {
+        const d = Math.hypot(b.x - x, b.y - y);
+        if (d < b.radius + 8) {
+          selectedBuildingId = b.id;
+          updateUI();
+          return;
+        }
+      }
+
+      updateUI();
+    }
+
+    function handleBoxSelect(box) {
+      const x1 = Math.min(box.x1, box.x2);
+      const y1 = Math.min(box.y1, box.y2);
+      const x2 = Math.max(box.x1, box.x2);
+      const y2 = Math.max(box.y1, box.y2);
+
+      selectedUnitIds = gameState.units
+        .filter(u => u.ownerId === myPlayerId)
+        .filter(u => u.x >= x1 && u.x <= x2 && u.y >= y1 && u.y <= y2)
+        .map(u => u.id);
+
+      selectedBuildingId = null;
+      updateUI();
+    }
+
+    function updateUI() {
+      if (!gameState) return;
+
+      const me = gameState.players.find(p => p.id === myPlayerId);
+      const myRes = gameState.resources[myPlayerId] || { gold: 0, science: 0 };
+      const myTech = gameState.tech[myPlayerId] || { researched: [], researching: null, progress: 0 };
+
+      document.getElementById("goldText").textContent = Math.floor(myRes.gold);
+      document.getElementById("scienceText").textContent = Math.floor(myRes.science);
+      document.getElementById("selectionText").textContent = selectedUnitIds.length || (selectedBuildingId ? 1 : 0);
+      document.getElementById("meInfo").innerHTML = `
+        이름: ${me?.name || ""}<br/>
+        생존: ${me?.alive ? "예" : "아니오"}<br/>
+        연구 중: ${myTech.researching || "없음"}
+      `;
+
+      const selectedUnits = gameState.units.filter(u => selectedUnitIds.includes(u.id));
+      const selectedBuilding = gameState.buildings.find(b => b.id === selectedBuildingId);
+
+      if (selectedUnits.length > 0) {
+        document.getElementById("selectedInfo").innerHTML =
+          selectedUnits.map(u => `${u.type} HP:${Math.round(u.hp)}/${u.maxHp}`).join("<br/>");
+      } else if (selectedBuilding) {
+        document.getElementById("selectedInfo").innerHTML =
+          `${selectedBuilding.type} HP:${Math.round(selectedBuilding.hp)}/${selectedBuilding.maxHp}`;
+      } else {
+        document.getElementById("selectedInfo").textContent = "없음";
+      }
+
+      const diploRoot = document.getElementById("diplomacyList");
+      diploRoot.innerHTML = "";
+      for (const p of gameState.players) {
+        if (p.id === myPlayerId) continue;
+        const status = gameState.diplomacy[`${myPlayerId}:${p.id}`] || "war";
+        const div = document.createElement("div");
+        div.className = "tech";
+        div.innerHTML = `
+          <div><b>${p.name}</b></div>
+          <div style="margin:6px 0;">
+            <span class="tag ${status}">${status}</span>
+          </div>
+          <button onclick="changeDiplo('${p.id}','war')">전쟁</button>
+          <button class="secondary" onclick="changeDiplo('${p.id}','peace')">평화</button>
+          <button class="warn" onclick="changeDiplo('${p.id}','alliance')">동맹</button>
+        `;
+        diploRoot.appendChild(div);
+      }
+
+      const TECHS = [
+        { id: "rifle", name: "자동소총", req: [], desc: "보병 공격 강화" },
+        { id: "armor", name: "중장갑", req: [], desc: "기갑 강화" },
+        { id: "port2", name: "항만 확장", req: [], desc: "해군 운용 강화" },
+        { id: "supply", name: "보급 개편", req: ["rifle"], desc: "포위 패널티 완화" },
+        { id: "landing", name: "상륙정", req: ["port2"], desc: "상륙 강화" },
+        { id: "economy", name: "전시경제", req: [], desc: "자원 수급 증가" },
+        { id: "fortress", name: "요새화", req: ["supply"], desc: "수도 방어 강화" }
+      ];
+
+      const techRoot = document.getElementById("techList");
+      techRoot.innerHTML = "";
+      for (const t of TECHS) {
+        const done = myTech.researched.includes(t.id);
+        const unlocked = t.req.every(r => myTech.researched.includes(r));
+        const researching = myTech.researching === t.id;
+
+        const div = document.createElement("div");
+        div.className = "tech";
+        div.innerHTML = `
+          <div><b>${t.name}</b></div>
+          <div class="small">${t.desc}</div>
+          <div class="small">선행: ${t.req.length ? t.req.join(", ") : "없음"}</div>
+          <div style="margin-top:6px;">
+            ${done ? "<span class='tag alliance'>완료</span>" :
+              researching ? `<span class='tag'>연구중 ${Math.floor(myTech.progress || 0)}s</span>` :
+              unlocked ? `<button onclick="researchTech('${t.id}')">연구</button>` :
+              "<span class='tag war'>잠김</span>"
+            }
+          </div>
+        `;
+        techRoot.appendChild(div);
+      }
+
+      const messages = document.getElementById("messages");
+      messages.innerHTML = (gameState.messages || []).map(m => `<div>${m.text}</div>`).join("");
+    }
+
+    window.changeDiplo = function(targetPlayerId, status) {
+      send("command", { command: "diplomacy", targetPlayerId, status });
+    };
+
+    window.researchTech = function(techId) {
+      send("command", { command: "research", techId });
+    };
+
+    function draw() {
+      requestAnimationFrame(draw);
+      if (!gameState) return;
+
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+
+      ctx.clearRect(0, 0, w, h);
+
+      drawTerrain();
+      drawInfluence();
+      drawBuildings();
+      drawArrows();
+      drawUnits();
+      drawSelection();
+      drawMessages();
+    }
+
+    function drawTerrain() {
+      ctx.fillStyle = "#24303b";
+      ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+
+      const seaY = gameState.seaY - cam.y;
+      ctx.fillStyle = "#174565";
+      ctx.fillRect(0, seaY, canvas.clientWidth, canvas.clientHeight - seaY);
+    }
+
+    function colorWithAlpha(hex, alpha) {
+      const r = parseInt(hex.slice(1,3), 16);
+      const g = parseInt(hex.slice(3,5), 16);
+      const b = parseInt(hex.slice(5,7), 16);
+      return `rgba(${r},${g},${b},${alpha})`;
+    }
+
+    function playerColor(pid) {
+      const p = gameState.players.find(x => x.id === pid);
+      return p?.color || "#ffffff";
+    }
+
+    function drawInfluence() {
+      const grid = gameState.influence;
+      if (!grid) return;
+
+      for (let r = 0; r < grid.rows; r++) {
+        for (let c = 0; c < grid.cols; c++) {
+          const idx = r * grid.cols + c;
+          const owner = grid.owner[idx];
+          if (!owner) continue;
+          const x = c * grid.cell - cam.x;
+          const y = r * grid.cell - cam.y;
+          ctx.fillStyle = colorWithAlpha(playerColor(owner), 0.12);
+          ctx.fillRect(x, y, grid.cell, grid.cell);
+        }
+      }
+    }
+
+    function drawBuildings() {
+      for (const b of gameState.buildings) {
+        const x = b.x - cam.x;
+        const y = b.y - cam.y;
+        const color = playerColor(b.ownerId);
+
+        ctx.beginPath();
+        ctx.fillStyle = b.type === "capital" ? color : "#d29b4d";
+        ctx.arc(x, y, b.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#111";
+        ctx.font = "12px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText(b.type === "capital" ? "수도" : "항구", x, y + 4);
+
+        drawHPBar(x, y - b.radius - 10, 42, b.hp / b.maxHp);
+      }
+    }
+
+    function drawUnits() {
+      for (const u of gameState.units) {
+        const x = u.x - cam.x;
+        const y = u.y - cam.y;
+        const color = playerColor(u.ownerId);
+
+        ctx.beginPath();
+        if (u.type === "infantry") {
+          ctx.fillStyle = color;
+          ctx.arc(x, y, u.radius, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (u.type === "tank") {
+          ctx.fillStyle = color;
+          ctx.fillRect(x - 10, y - 8, 20, 16);
+        } else if (u.type === "ship") {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.moveTo(x, y - 12);
+          ctx.lineTo(x + 14, y + 10);
+          ctx.lineTo(x - 14, y + 10);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        if (u.encircled) {
+          ctx.strokeStyle = "#ff5555";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(x, y, u.radius + 5, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        drawHPBar(x, y - u.radius - 9, 30, u.hp / u.maxHp);
+      }
+    }
+
+    function drawHPBar(x, y, w, ratio) {
+      ctx.fillStyle = "#111";
+      ctx.fillRect(x - w/2, y, w, 5);
+      ctx.fillStyle = ratio > 0.5 ? "#52c16c" : ratio > 0.25 ? "#e0b74f" : "#d85a5a";
+      ctx.fillRect(x - w/2, y, w * Math.max(0, ratio), 5);
+    }
+
+    function drawArrows() {
+      for (const a of gameState.arrows || []) {
+        const fx = a.fromX - cam.x;
+        const fy = a.fromY - cam.y;
+        const tx = a.toX - cam.x;
+        const ty = a.toY - cam.y;
+
+        const dx = tx - fx;
+        const dy = ty - fy;
+        const ang = Math.atan2(dy, dx);
+
+        ctx.strokeStyle = playerColor(a.ownerId);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(fx, fy);
+        ctx.lineTo(tx, ty);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(tx - 10 * Math.cos(ang - 0.4), ty - 10 * Math.sin(ang - 0.4));
+        ctx.lineTo(tx - 10 * Math.cos(ang + 0.4), ty - 10 * Math.sin(ang + 0.4));
+        ctx.closePath();
+        ctx.fillStyle = playerColor(a.ownerId);
+        ctx.fill();
+      }
+    }
+
+    function drawSelection() {
+      for (const id of selectedUnitIds) {
+        const u = gameState.units.find(x => x.id === id);
+        if (!u) continue;
+        const x = u.x - cam.x;
+        const y = u.y - cam.y;
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, u.radius + 6, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      if (selectedBuildingId) {
+        const b = gameState.buildings.find(x => x.id === selectedBuildingId);
+        if (b) {
+          const x = b.x - cam.x;
+          const y = b.y - cam.y;
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(x, y, b.radius + 6, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+
+      if (drag) {
+        const x = Math.min(drag.x1, drag.x2) - cam.x;
+        const y = Math.min(drag.y1, drag.y2) - cam.y;
+        const w = Math.abs(drag.x2 - drag.x1);
+        const h = Math.abs(drag.y2 - drag.y1);
+        ctx.strokeStyle = "#ffffff";
+        ctx.strokeRect(x, y, w, h);
+      }
+    }
+
+    function drawMessages() {
+      if (gameState.phase === "ended") {
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+        ctx.fillStyle = "#fff";
+        ctx.font = "42px Arial";
+        ctx.textAlign = "center";
+        const msg = gameState.messages?.[gameState.messages.length - 1]?.text || "게임 종료";
+        ctx.fillText(msg, canvas.clientWidth / 2, canvas.clientHeight / 2);
+      }
+    }
+
+    draw();
+  </script>
+</body>
+</html>
 
